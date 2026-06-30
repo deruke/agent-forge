@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Package Age Gate — npm wrapper
+#
+# Intercepts 'npm install/i/add' commands with explicit package arguments and
+# checks each package's publish date against a configurable threshold before
+# delegating to the real npm binary.
+#
+# Environment:
+#   PACKAGE_AGE_GATE           enforce|audit|off  (default: enforce)
+#   PACKAGE_AGE_GATE_THRESHOLD days               (default: 7)
+# =============================================================================
+
+# No set -e: we need to inspect gate.py exit codes without the shell aborting
+set -uo pipefail
+
+GATE_SCRIPT="/usr/local/lib/package-age-gate/gate.py"
+REAL_NPM="/usr/bin/npm"
+MODE="${PACKAGE_AGE_GATE:-enforce}"
+
+# --- Off mode or non-existent gate script: pass through ---
+if [[ "$MODE" == "off" ]] || [[ ! -f "$GATE_SCRIPT" ]]; then
+    exec "$REAL_NPM" "$@"
+fi
+
+# --- Detect if this is an install command ---
+is_install=false
+for arg in "$@"; do
+    case "$arg" in
+        -*) continue ;;
+        install|i|add) is_install=true; break ;;
+        *) break ;;
+    esac
+done
+
+if [[ "$is_install" != "true" ]]; then
+    exec "$REAL_NPM" "$@"
+fi
+
+# --- Parse install arguments to extract package names ---
+packages=()
+skip_next=false
+seen_install=false
+
+for arg in "$@"; do
+    if [[ "$skip_next" == "true" ]]; then
+        skip_next=false
+        continue
+    fi
+
+    case "$arg" in
+        install|i|add)
+            if [[ "$seen_install" == "false" ]]; then
+                seen_install=true
+                continue
+            fi
+            ;;
+        # Flags that consume the next argument
+        --registry|--tag|--otp|--workspace|-w)
+            skip_next=true
+            continue
+            ;;
+        # Boolean flags (no value)
+        -g|--global|--save|--save-dev|--save-optional|--save-exact| \
+        --save-peer|-D|-O|-E|-P|--no-save|--legacy-peer-deps| \
+        --force|--dry-run|--ignore-scripts)
+            continue
+            ;;
+        # Other flags
+        -*)
+            continue
+            ;;
+        *)
+            if [[ "$seen_install" == "true" ]]; then
+                # Skip local paths and URLs
+                case "$arg" in
+                    ./*|../*|/*|*.tgz|*.tar.gz|git+*|http://*|https://*|github:*|file:*)
+                        continue
+                        ;;
+                esac
+                packages+=("$arg")
+            fi
+            ;;
+    esac
+done
+
+# --- No explicit packages? (npm install from package.json) Pass through ---
+if [[ ${#packages[@]} -eq 0 ]]; then
+    exec "$REAL_NPM" "$@"
+fi
+
+# --- Gate check each package ---
+blocked=()
+for pkg_spec in "${packages[@]}"; do
+    # Parse package name and version from npm spec format
+    # Scoped: @scope/pkg or @scope/pkg@version
+    # Unscoped: pkg or pkg@version
+    pkg_name=""
+    version=""
+
+    if [[ "$pkg_spec" == @*/* ]]; then
+        # Scoped package
+        # Check if there's a version after the second @
+        # @scope/pkg@1.2.3 -> name=@scope/pkg, version=1.2.3
+        local_spec="${pkg_spec#@}"  # Remove leading @
+        if [[ "$local_spec" == *@* ]]; then
+            # Has version: scope/pkg@1.2.3
+            scope_and_name="@${local_spec%@*}"
+            version="${local_spec##*@}"
+            pkg_name="$scope_and_name"
+        else
+            pkg_name="$pkg_spec"
+        fi
+    else
+        # Unscoped package
+        if [[ "$pkg_spec" == *@* ]]; then
+            pkg_name="${pkg_spec%%@*}"
+            version="${pkg_spec##*@}"
+        else
+            pkg_name="$pkg_spec"
+        fi
+    fi
+
+    # Skip empty names
+    [[ -z "$pkg_name" ]] && continue
+
+    # Call gate.py
+    if [[ -n "$version" ]]; then
+        python3 "$GATE_SCRIPT" npm "$pkg_name" "$version" >/dev/null
+        gate_exit=$?
+    else
+        python3 "$GATE_SCRIPT" npm "$pkg_name" >/dev/null
+        gate_exit=$?
+    fi
+
+    if [[ "$gate_exit" -eq 1 ]]; then
+        blocked+=("$pkg_name")
+        echo "[AGE-GATE] BLOCKED: $pkg_name — published less than ${PACKAGE_AGE_GATE_THRESHOLD:-7} days ago" >&2
+    fi
+done
+
+# --- Enforce: block if any packages were too new ---
+if [[ ${#blocked[@]} -gt 0 && "$MODE" == "enforce" ]]; then
+    echo "" >&2
+    echo "[AGE-GATE] Refusing to install. Blocked packages: ${blocked[*]}" >&2
+    echo "[AGE-GATE] Supply chain safety: packages must be at least ${PACKAGE_AGE_GATE_THRESHOLD:-7} days old." >&2
+    echo "[AGE-GATE] Options:" >&2
+    echo "[AGE-GATE]   - Set PACKAGE_AGE_GATE=audit to allow with warnings" >&2
+    echo "[AGE-GATE]   - Add package to the allowlist" >&2
+    echo "[AGE-GATE]   - Set PACKAGE_AGE_GATE=off to disable (not recommended)" >&2
+    exit 1
+fi
+
+# --- All clear (or audit mode) — delegate to real npm ---
+exec "$REAL_NPM" "$@"

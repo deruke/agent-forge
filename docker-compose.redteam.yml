@@ -1,0 +1,18 @@
+# Red team overlay — builds the operator container with offensive tools.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.redteam.yml up -d --build
+#
+# Sets the INSTALL_REDTEAM build flag on the single, flag-driven Dockerfile.
+# Add INSTALL_HERMES=true below if you also want the local-llama.cpp agent.
+# Inherits volumes / env_file / extra_hosts / tty from docker-compose.yml via merge.
+services:
+  forge:
+    image: agent-forge:redteam
+    # Responder/ARP poisoning need NET_ADMIN on top of the base NET_RAW.
+    # (security_opt / cap_drop / limits are inherited from docker-compose.yml.)
+    cap_add: [NET_RAW, NET_ADMIN]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_REDTEAM: "true"

@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Package Age Gate — pip/pip3 wrapper
+#
+# Intercepts 'pip install' commands and checks each package's publish date
+# against a configurable threshold before delegating to the real pip binary.
+#
+# Environment:
+#   PACKAGE_AGE_GATE           enforce|audit|off  (default: enforce)
+#   PACKAGE_AGE_GATE_THRESHOLD days               (default: 7)
+# =============================================================================
+
+# No set -e: we need to inspect gate.py exit codes without the shell aborting
+set -uo pipefail
+
+GATE_SCRIPT="/usr/local/lib/package-age-gate/gate.py"
+REAL_PIP="/usr/bin/pip3"
+MODE="${PACKAGE_AGE_GATE:-enforce}"
+
+# --- Off mode or non-existent gate script: pass through ---
+if [[ "$MODE" == "off" ]] || [[ ! -f "$GATE_SCRIPT" ]]; then
+    exec "$REAL_PIP" "$@"
+fi
+
+# --- Detect if this is an install command ---
+is_install=false
+for arg in "$@"; do
+    case "$arg" in
+        -*) continue ;;
+        install) is_install=true; break ;;
+        *) break ;;
+    esac
+done
+
+if [[ "$is_install" != "true" ]]; then
+    exec "$REAL_PIP" "$@"
+fi
+
+# --- Parse install arguments to extract package names ---
+packages=()
+requirements_files=()
+skip_next=false
+prev_flag=""
+seen_install=false
+
+for arg in "$@"; do
+    if [[ "$skip_next" == "true" ]]; then
+        # Previous arg was a flag that consumes the next value
+        if [[ "$prev_flag" == "-r" || "$prev_flag" == "--requirement" ]]; then
+            requirements_files+=("$arg")
+        fi
+        skip_next=false
+        continue
+    fi
+
+    case "$arg" in
+        install)
+            if [[ "$seen_install" == "false" ]]; then
+                seen_install=true
+                continue
+            fi
+            ;;
+        # Flags that consume the next argument
+        -r|--requirement|-c|--constraint|-e|--editable|-t|--target| \
+        --prefix|--src|--root|--index-url|-i|--extra-index-url| \
+        -f|--find-links|--no-binary|--only-binary|--platform| \
+        --python-version|--implementation|--abi)
+            prev_flag="$arg"
+            skip_next=true
+            continue
+            ;;
+        # Flags with = syntax for requirements
+        -r=*|--requirement=*)
+            requirements_files+=("${arg#*=}")
+            continue
+            ;;
+        # All other flags (--no-cache-dir, --break-system-packages, etc.)
+        -*)
+            continue
+            ;;
+        *)
+            if [[ "$seen_install" == "true" ]]; then
+                # Skip local paths, wheels, archives, git/http URLs
+                case "$arg" in
+                    ./*|../*|/*|*.whl|*.tar.gz|*.zip|git+*|http://*|https://*)
+                        continue
+                        ;;
+                esac
+                packages+=("$arg")
+            fi
+            ;;
+    esac
+done
+
+# --- Parse requirements files ---
+for reqfile in "${requirements_files[@]}"; do
+    if [[ -f "$reqfile" ]]; then
+        while IFS= read -r line; do
+            # Strip inline comments and trim whitespace (bash builtins, no subshell)
+            line="${line%%#*}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%"${line##*[![:space:]]}"}"
+            [[ -z "$line" ]] && continue
+            # Skip option lines and local paths/URLs
+            [[ "$line" == -* ]] && continue
+            case "$line" in
+                ./*|../*|/*|git+*|http://*|https://*) continue ;;
+            esac
+            packages+=("$line")
+        done < "$reqfile"
+    fi
+done
+
+# --- No packages to check? Pass through ---
+if [[ ${#packages[@]} -eq 0 ]]; then
+    exec "$REAL_PIP" "$@"
+fi
+
+# --- Gate check each package ---
+blocked=()
+for pkg_spec in "${packages[@]}"; do
+    # Strip extras: pkg[extra1,extra2] -> pkg
+    pkg_name="${pkg_spec%%\[*}"
+
+    # Strip version specifiers to get bare name
+    pkg_name="${pkg_name%%>*}"
+    pkg_name="${pkg_name%%<*}"
+    pkg_name="${pkg_name%%!*}"
+    pkg_name="${pkg_name%%~*}"
+    pkg_name="${pkg_name%%=*}"
+
+    # Extract pinned version if == present in original spec
+    version=""
+    if [[ "$pkg_spec" == *"=="* ]]; then
+        version="${pkg_spec##*==}"
+        version="${version%%\[*}"  # Strip any trailing extras
+    fi
+
+    # Call gate.py
+    if [[ -n "$version" ]]; then
+        python3 "$GATE_SCRIPT" pip "$pkg_name" "$version" >/dev/null
+        gate_exit=$?
+    else
+        python3 "$GATE_SCRIPT" pip "$pkg_name" >/dev/null
+        gate_exit=$?
+    fi
+
+    if [[ "$gate_exit" -eq 1 ]]; then
+        blocked+=("$pkg_name")
+        echo "[AGE-GATE] BLOCKED: $pkg_name — published less than ${PACKAGE_AGE_GATE_THRESHOLD:-7} days ago" >&2
+    fi
+done
+
+# --- Enforce: block if any packages were too new ---
+if [[ ${#blocked[@]} -gt 0 && "$MODE" == "enforce" ]]; then
+    echo "" >&2
+    echo "[AGE-GATE] Refusing to install. Blocked packages: ${blocked[*]}" >&2
+    echo "[AGE-GATE] Supply chain safety: packages must be at least ${PACKAGE_AGE_GATE_THRESHOLD:-7} days old." >&2
+    echo "[AGE-GATE] Options:" >&2
+    echo "[AGE-GATE]   - Set PACKAGE_AGE_GATE=audit to allow with warnings" >&2
+    echo "[AGE-GATE]   - Add package to the allowlist" >&2
+    echo "[AGE-GATE]   - Set PACKAGE_AGE_GATE=off to disable (not recommended)" >&2
+    exit 1
+fi
+
+# --- All clear (or audit mode) — delegate to real pip ---
+exec "$REAL_PIP" "$@"

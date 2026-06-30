@@ -1,0 +1,15 @@
+# Blue team overlay — builds the operator container with DFIR tools.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.blueteam.yml up -d --build
+#
+# Sets the INSTALL_BLUETEAM build flag on the single, flag-driven Dockerfile.
+# Add INSTALL_HERMES=true below if you also want the local-llama.cpp agent.
+# Inherits volumes / env_file / extra_hosts / tty from docker-compose.yml via merge.
+services:
+  forge:
+    image: agent-forge:blueteam
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_BLUETEAM: "true"

@@ -1,0 +1,21 @@
+# Hermes Agent — agent-forge config (seeded to ~/.hermes/config.yaml).
+# Wires Hermes to a llama.cpp server on the HOST. Docs: https://hermes-agent.nousresearch.com/docs
+# Note: the host llama-server must be reachable from the container (not 127.0.0.1). Bind to the
+# Docker bridge gateway on Linux (172.17.0.1) or 0.0.0.0 on macOS. See README re: LAN exposure.
+
+model:
+  # Bare model name — NO provider prefix for a custom endpoint. llama.cpp ignores
+  # this for routing, so any label works; set it to your model for clarity.
+  default: "local-llamacpp"
+  # "custom" = any OpenAI-compatible endpoint (aliases: ollama, vllm, llamacpp).
+  provider: "custom"
+  # Container reaches the host via host.docker.internal; llama.cpp API is under /v1.
+  base_url: "http://host.docker.internal:8080/v1"
+  # llama.cpp ignores auth by default; any non-empty value satisfies the SDK.
+  api_key: "no-key-needed"
+  # Uncomment if Hermes mis-sizes the window (llama.cpp may not expose /v1/models):
+  # context_length: 32768
+
+agent:
+  # Local models are slower than frontier APIs; cap turns to keep sessions snappy.
+  max_turns: 40

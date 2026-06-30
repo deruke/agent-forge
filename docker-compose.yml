@@ -1,0 +1,32 @@
+services:
+  forge:
+    image: deruke/agent-forge:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DISABLE_AUTOUPDATER=1
+    volumes:
+      - ./workspace:/home/operator/workspace
+      # Skills are not shipped in the repo. To use your host PAI skills inside
+      # the container, add a bind mount here pointing at your own ~/.claude/skills, e.g.:
+      #   - ${HOME}/.claude/skills:/home/operator/.claude/skills:ro
+    # host.docker.internal auto-resolves on Docker Desktop (macOS/Windows). It is NOT mapped in this
+    # base flavor. On Linux, or to reach a host Ollama/llama.cpp from base, add:
+    #   extra_hosts: ["host.docker.internal:host-gateway"]
+    # (the hermes overlay adds this automatically.)
+    # --- Hardening: reduce blast radius on the host (see README "Security model") ---
+    security_opt:
+      - "no-new-privileges:true"   # blocks sudo/setuid privilege escalation even with the sudoers line
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]             # nmap -sS, tcpdump/tshark packet capture
+    pids_limit: 512                # fork-bomb guard
+    mem_limit: 6g                  # OOM / cryptominer guard
+    cpus: "4.0"
+    stdin_open: true
+    tty: true
+    # Default: bridge network. Use --network none for offline labs.
+    # ports:
+    #   - "8080:8080"  # Uncomment if labs need port exposure

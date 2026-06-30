@@ -1,0 +1,15 @@
+# Package Age Gate — Allowlist
+# ============================================================================
+# Packages listed here bypass the age check entirely.
+# One package name per line, case-insensitive.
+# Lines starting with # are comments. Blank lines are ignored.
+#
+# Use this for:
+#   - Internal/private packages you trust
+#   - Packages you've manually verified are safe
+#   - Packages that were recently published but are legitimate
+#
+# Example:
+#   my-internal-tool
+#   @myorg/private-sdk
+# ============================================================================

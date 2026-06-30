@@ -1,0 +1,25 @@
+# Hermes overlay — adds the NousResearch Hermes agent (local llama.cpp / llama-swap).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.hermes.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.hermes.yml exec forge bash
+#
+# Sets the INSTALL_HERMES build flag (adds ~6 GB; provisions Python 3.11 + ffmpeg).
+# Stackable with the role overlays to combine payloads, e.g.:
+#   docker compose -f docker-compose.yml -f docker-compose.redteam.yml -f docker-compose.hermes.yml up -d --build
+# (when stacking, the image tag is taken from the last -f overlay).
+#
+# Hermes is pre-wired to a host llama.cpp/llama-swap server via ~/.hermes/config.yaml.
+# The server must listen on 0.0.0.0 (not 127.0.0.1) to be reachable from the container.
+# Inherits volumes / env_file / extra_hosts / tty from docker-compose.yml via merge.
+services:
+  forge:
+    image: agent-forge:hermes
+    # Hermes talks to a host llama.cpp/llama-swap; map host.docker.internal (needed on Linux;
+    # auto-resolves on Docker Desktop but harmless to declare).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_HERMES: "true"

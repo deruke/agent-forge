@@ -1,0 +1,38 @@
+# ============================================================================
+# agent-forge — Cloud Security Overlay
+# Adds cloud provider CLIs and audit tools to the base platform
+# ============================================================================
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# AWS CLI v2
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl unzip python3 python3-pip groff less \
+    && curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/aws /tmp/awscliv2.zip
+
+# Azure CLI
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+# Google Cloud CLI
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.asc] https://packages.cloud.google.com/apt cloud-sdk main" \
+    > /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | tee /usr/share/keyrings/cloud.google.asc \
+    && apt-get update && apt-get install -y google-cloud-cli \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Cloud audit tools
+RUN pip3 install --no-cache-dir --break-system-packages \
+    scoutsuite \
+    prowler
+
+# Non-root user matching base image
+RUN useradd -m -s /bin/bash -u 1000 operator 2>/dev/null || true
+
+USER operator
+WORKDIR /home/operator/workspace
+CMD ["/bin/bash"]

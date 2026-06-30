@@ -1,0 +1,65 @@
+# Tailscale overlay. Gives the container a tailnet identity so it can reach a tailnet peer
+# (e.g. a DGX Spark vLLM server) from anywhere, including off your home LAN.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.tailscale.yml exec forge bash
+#   # stack with other overlays, e.g. + Hermes:
+#   docker compose -f docker-compose.yml -f docker-compose.hermes.yml -f docker-compose.tailscale.yml up -d --build
+#
+# DESIGN: a tailscale SIDECAR joins forge's network namespace (`network_mode: service:forge`),
+# exactly like the msf/cloud overlays. forge stays the netns owner, so it KEEPS its bridge network,
+# host.docker.internal, and ports (host-local llama.cpp/Ollama still work) and ALSO gains tailnet
+# reachability. The TUN device + NET_ADMIN privilege live ONLY on this throwaway sidecar; forge keeps
+# its cap_drop:[ALL] hardening untouched.
+#
+# WHY A SIDECAR (not host Tailscale, not baked into the image): this keeps Tailscale entirely OFF your
+# host, so a managed host VPN (e.g. Cloudflare WARP) is left completely untouched. The sidecar's
+# WireGuard traffic just egresses through the host's existing default route. (WARP's egress policy must
+# permit Tailscale's coordination/DERP: outbound UDP 41641 and 443.)
+#
+# SETUP:
+#   1. Mint an auth key (ephemeral + tagged recommended) at
+#        https://login.tailscale.com/admin/settings/keys
+#   2. In .env:   TS_AUTHKEY=tskey-auth-...
+#   3. In .env:   DGX_VLLM_URL=http://100.x.x.x:8000/v1   # your tailnet peer's vLLM endpoint
+#   4. Point the agents at it:  `hermes-switch spark`  (Hermes)  /  select the "spark" provider (OpenCode).
+#
+# Verify:  `docker compose ... exec tailscale tailscale status`  (mesh up, via the sidecar)
+#     and  `docker compose ... exec forge bash -lc 'curl -s "$DGX_VLLM_URL/models"'`  (endpoint reachable)
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.98.4
+    # NOTE: `hostname:` is illegal alongside `network_mode: service:`. Set the tailnet node name via
+    # TS_HOSTNAME instead.
+    network_mode: "service:forge"   # join forge's netns (forge stays the owner; msf/cloud do the same)
+    depends_on:
+      - forge
+    environment:
+      # Auth key is REQUIRED and must come from .env. Never hardcode it here.
+      - TS_AUTHKEY=${TS_AUTHKEY:?set TS_AUTHKEY in .env, mint at https://login.tailscale.com/admin/settings/keys}
+      - TS_HOSTNAME=${TS_HOSTNAME:-agent-forge}   # node name shown in your tailnet admin console
+      - TS_STATE_DIR=/var/lib/tailscale            # persist node identity across restarts
+      - TS_USERSPACE=false                         # kernel TUN (needs /dev/net/tun); transparent routing
+      - TS_ACCEPT_DNS=false                        # don't let MagicDNS clobber the container resolver
+      # Optional extra flags. Recommended once you've defined the tag in your tailnet ACLs:
+      #   TS_EXTRA_ARGS=--advertise-tags=tag:agent-forge
+      # (advertising an undefined tag makes `tailscale up` fail, so this defaults to empty.)
+      - TS_EXTRA_ARGS=${TS_EXTRA_ARGS:-}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # --- Hardening: privilege is scoped to THIS sidecar; forge keeps cap_drop:[ALL] ---
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop: [ALL]
+    cap_add:
+      - NET_ADMIN                  # tailscaled brings up the tailnet interface in the shared netns
+      - NET_RAW
+    pids_limit: 512
+    mem_limit: 512m
+    cpus: "1.0"
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:

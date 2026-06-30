@@ -1,0 +1,17 @@
+# Metasploit overlay — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.msf.yml up
+services:
+  msf:
+    image: metasploitframework/metasploit-framework:latest
+    network_mode: "service:forge"
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop: [ALL]
+    cap_add: [NET_RAW]             # MSF network modules need raw sockets
+    pids_limit: 512
+    mem_limit: 6g
+    cpus: "4.0"
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./workspace:/home/operator/workspace

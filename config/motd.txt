@@ -1,0 +1,23 @@
+
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║                                                               ║
+    ║     ⚒  A G E N T - F O R G E                                 ║
+    ║        Agentic AI Security Workbench                          ║
+    ║                                                               ║
+    ║     AI Agents:                                                ║
+    ║       claude   — Claude Code    (Anthropic)                   ║
+    ║       opencode — OpenCode       (Open Source)                 ║
+    ║       codex    — Codex CLI      (OpenAI)                      ║
+    ║                                                               ║
+    ║     Quick Start:                                              ║
+    ║       cc / oc / cx       — agent aliases                      ║
+    ║       tmux               — terminal multiplexer               ║
+    ║       nmap / nuclei      — recon & scanning                   ║
+    ║       vol3 / chainsaw    — forensics & IR                     ║
+    ║       r2                 — reverse engineering                 ║
+    ║                                                               ║
+    ║     Workspace: ~/workspace                                    ║
+    ║     Docs: github.com/deruke/agent-forge                       ║
+    ║                                                               ║
+    ╚═══════════════════════════════════════════════════════════════╝
+
