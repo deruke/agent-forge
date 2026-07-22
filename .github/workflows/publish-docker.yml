@@ -1,0 +1,90 @@
+name: Publish agent-forge image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Create this repository in Docker Hub before running the workflow.
+  IMAGE_NAME: deruke/agent-forge
+
+jobs:
+  publish:
+    name: Build and publish Ubuntu 24.04 image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate publishing configuration and build context
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" || { echo "Missing repository variable: DOCKERHUB_USERNAME" >&2; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "Missing repository secret: DOCKERHUB_TOKEN" >&2; exit 1; }
+          test -f Dockerfile || { echo "Dockerfile must be at the repository root" >&2; exit 1; }
+          test -d config || { echo "Missing Docker build-context directory: config/" >&2; exit 1; }
+          test -d scripts || { echo "Missing Docker build-context directory: scripts/" >&2; exit 1; }
+          test -d package-age-gate || { echo "Missing Docker build-context directory: package-age-gate/" >&2; exit 1; }
+
+      # Required to execute non-native ARM64 build steps on the AMD64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+
+      - name: Build and push Ubuntu 24.04 image
+        uses: docker/build-push-action@v7
+        with:
+          # The Dockerfile COPY instructions need config/, scripts/, and
+          # package-age-gate/ to be present beneath this repository-root context.
+          context: .
+          file: ./Dockerfile
+          target: final
+          platforms: linux/amd64,linux/arm64
+          push: true
+          pull: true
+          build-args: |
+            INSTALL_HERMES=false
+            INSTALL_REDTEAM=false
+            INSTALL_BLUETEAM=false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=agent-forge-base
+          cache-to: type=gha,mode=max,scope=agent-forge-base
+          provenance: mode=max
+          sbom: true
