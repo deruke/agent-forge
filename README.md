@@ -302,9 +302,11 @@ oc /models                 # switch models interactively
 oc -m nvidia/meta/llama-3.3-70b-instruct "..."   # or pick one per run
 ```
 
-Default model: `nvidia/llama-3.3-nemotron-super-49b-v1.5` (agentic/reasoning-tuned). Alternatives in
-the menu: Nemotron Super 49B v1, `meta/llama-3.3-70b-instruct` (very reliable tool calls), and
-`nvidia/llama-3.1-nemotron-nano-8b-v1` (fast/cheap). Browse 100+ models at build.nvidia.com.
+Default model: `qwen/qwen3-coder-480b-a35b-instruct` (480B MoE, agentic coding + function calling).
+Alternatives in the menu: `nvidia/llama-3.3-nemotron-super-49b-v1.5` (reliable NVIDIA-native backup),
+`nvidia/llama-3.1-nemotron-ultra-253b-v1` (highest accuracy), `meta/llama-3.3-70b-instruct` (very
+reliable tool calls), and `nvidia/llama-3.1-nemotron-nano-8b-v1` (fast/cheap). Browse 100+ models at
+build.nvidia.com.
 
 > Verify your key is valid for **inference**, not just the catalog: `/v1/models` is public and
 > returns 200 for anyone, so a 200 there proves nothing. A bad/expired key fails only at the first
@@ -364,9 +366,9 @@ hermes-switch sonnet           # Anthropic Claude Sonnet 4.6 (1M context)
 > as the 2nd arg or set `HERMES_GEMINI_MODEL`.
 
 Notes: **NVIDIA NIM** ([build.nvidia.com](https://build.nvidia.com)) offers 100+ models on a free
-tier — good for running the labs without burning cloud credits. The default is the small/fast
-`nvidia/llama-3.1-nemotron-nano-8b-v1`; for stronger agentic performance pass a larger model (e.g. a
-Llama Nemotron Super) or set `HERMES_NIM_MODEL`. 1M context is native to Opus 4.8 / Sonnet 4.6 — no
+tier — good for running the labs without burning cloud credits. The default is
+`qwen/qwen3-coder-480b-a35b-instruct` (strong agentic coding); override with `HERMES_NIM_MODEL` or
+pass a model id as the 2nd arg (e.g. `hermes-switch nim nvidia/llama-3.3-nemotron-super-49b-v1.5`). 1M context is native to Opus 4.8 / Sonnet 4.6 — no
 beta header or special model ID needed; the switcher sets `context_length: 1000000`. The local model
 id/URL override via `HERMES_LOCAL_MODEL` / `HERMES_LOCAL_URL`. Changes take effect on the next
 `hermes` launch.

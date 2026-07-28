@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+  "model": "nvidia/qwen/qwen3-coder-480b-a35b-instruct",
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
@@ -36,11 +36,14 @@
         "apiKey": "{env:NVIDIA_API_KEY}"
       },
       "models": {
-        "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
-          "name": "Nemotron Super 49B v1.5 (labs default, agentic)"
+        "qwen/qwen3-coder-480b-a35b-instruct": {
+          "name": "Qwen3 Coder 480B A35B (labs default, agentic coding)"
         },
-        "nvidia/llama-3.3-nemotron-super-49b-v1": {
-          "name": "Nemotron Super 49B v1"
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
+          "name": "Nemotron Super 49B v1.5 (agentic, reliable backup)"
+        },
+        "nvidia/llama-3.1-nemotron-ultra-253b-v1": {
+          "name": "Nemotron Ultra 253B (highest accuracy)"
         },
         "meta/llama-3.3-70b-instruct": {
           "name": "Llama 3.3 70B Instruct (reliable tools)"

@@ -28,9 +28,9 @@ LOCAL_URL="${HERMES_LOCAL_URL:-http://host.docker.internal:8000/v1}"
 SPARK_URL="${DGX_VLLM_URL:-${HERMES_SPARK_URL:-http://host.docker.internal:8000/v1}}"
 SPARK_MODEL="${2:-${DGX_VLLM_MODEL:-Qwen/Qwen3.6-27B-FP8}}"
 # NVIDIA NIM model id — override with arg2 or $HERMES_NIM_MODEL. Pick any model from
-# build.nvidia.com; a larger Nemotron (e.g. nvidia/llama-3.3-nemotron-super-49b-v1.5) gives
-# stronger agentic performance than this small, fast, free-tier default.
-NIM_MODEL="${2:-${HERMES_NIM_MODEL:-nvidia/llama-3.1-nemotron-nano-8b-v1}}"
+# build.nvidia.com; Qwen3-Coder-480B is the default (strong agentic coding + function calling).
+# Alternative: nvidia/llama-3.3-nemotron-super-49b-v1.5 (reliable NVIDIA-native backup).
+NIM_MODEL="${2:-${HERMES_NIM_MODEL:-qwen/qwen3-coder-480b-a35b-instruct}}"
 # Gemini model id — override with arg2 or $HERMES_GEMINI_MODEL. Gemini ids churn fast;
 # confirm the current one at ai.google.dev/gemini-api/docs/models.
 GEMINI_MODEL="${2:-${HERMES_GEMINI_MODEL:-gemini-3.5-flash}}"
