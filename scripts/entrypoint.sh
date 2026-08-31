@@ -32,6 +32,14 @@ if [ ! -f "$HOME/workspace/opencode.json" ] && [ -f "$HOME/.opencode-template.js
     echo "  Seeded workspace/opencode.json (NVIDIA NIM default + Ollama/Spark)"
 fi
 
+# Optional: pre-wire numbat's OpenCode monitoring plugin (observe-only). Off by default so the
+# M6 lab installs it as a hands-on step. Flip NUMBAT_AUTOWIRE=true in .env to make it turnkey.
+if [ "${NUMBAT_AUTOWIRE:-false}" = "true" ] && command -v numbat >/dev/null 2>&1; then
+    if numbat hook install --agent opencode --emit all >/dev/null 2>&1; then
+        echo "  numbat: OpenCode monitoring plugin wired (observe-only)"
+    fi
+fi
+
 # Seed Hermes config from template if absent (so it stays editable without a rebuild)
 if [ ! -f "$HOME/.hermes/config.yaml" ] && [ -f "$HOME/.hermes-template.yaml" ]; then
     cp "$HOME/.hermes-template.yaml" "$HOME/.hermes/config.yaml"

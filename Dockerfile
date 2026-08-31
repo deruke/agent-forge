@@ -118,6 +118,28 @@ RUN npm install -g @openai/codex@0.139.0 \
 RUN npm install -g @ai-sdk/openai-compatible@2.0.48 \
     && echo "AI SDK OpenAI-compatible provider installed"
 
+# numbat — AI-agent detection & response (Perplexity, Apache-2.0). Single static Go binary,
+# preinstalled so students never download it. The OpenCode monitoring plugin (observe-only) is
+# wired at runtime: by the M6 lab, or by entrypoint.sh when NUMBAT_AUTOWIRE=true. Arch-matched +
+# checksum-verified against the release manifest. Pinned; bump deliberately.
+ARG NUMBAT_VERSION=0.2.0
+RUN ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) NB=amd64 ;; \
+        arm64) NB=arm64 ;; \
+        *) echo "numbat: unsupported arch $ARCH" >&2; exit 1 ;; \
+    esac; \
+    cd /tmp \
+    && A="numbat_${NUMBAT_VERSION}_linux_${NB}.tar.gz" \
+    && curl -fsSL "https://github.com/perplexityai/numbat/releases/download/v${NUMBAT_VERSION}/${A}" -o "$A" \
+    && curl -fsSL "https://github.com/perplexityai/numbat/releases/download/v${NUMBAT_VERSION}/checksums.txt" -o numbat-sums.txt \
+    && grep " ${A}\$" numbat-sums.txt | sha256sum -c - \
+    && tar xzf "$A" \
+    && install -m 0755 "$(find . -maxdepth 2 -type f -name numbat | head -1)" /usr/local/bin/numbat \
+    && numbat version \
+    && rm -rf /tmp/numbat* /tmp/"$A" numbat-sums.txt \
+    && echo "numbat ${NUMBAT_VERSION} installed to /usr/local/bin/numbat"
+
 # Hermes Agent (NousResearch) — OPT-IN. Adds ~4.3 GB (auto-provisions Python 3.11 + ffmpeg).
 # Enable with --build-arg INSTALL_HERMES=true. Installs to /usr/local/bin/hermes; the provider
 # config is seeded later (config/hermes-config.yaml -> ~/.hermes/config.yaml). The `hermes setup`
