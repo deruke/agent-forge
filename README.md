@@ -1,8 +1,8 @@
 # agent-forge
 
-A reproducible Docker **AI security workstation** for operators: three core AI CLI agents (plus an opt-in local-model agent) and curated offensive/DFIR tooling in one environment.
+A Docker based isolation environment for cyber security operators. Has Claude Code, Codex, Oh My Pi, and optionally Hermes.
 
-Built for operators who want AI-assisted pentesting, incident response, and forensic analysis with a host-hygiene boundary around the tooling, ready to run. See [Security model](#security-model) for what that boundary does and does not do.
+Built for operators who want AI-assisted pentesting, incident response, and forensic analysis with a host hygiene boundary around the tooling. See [Security model](#security-model) for what that boundary does and does not do.
 
 ### Build flavors
 
